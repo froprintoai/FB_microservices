@@ -1,0 +1,29 @@
+body{
+    margin: 0;
+    background-color: #D9DCE0;
+}
+#top {
+    height: 80px;
+    background-color: #3E5997;
+}
+#signup {
+    width: 400px;
+    margin: auto;
+}
+
+#logo {
+    float: left;
+    position: relative;
+    left: 100px;
+    top: 18px;
+}
+
+#login {
+    float: right;
+    position: relative;
+    right: 100px;
+}
+
+#login-email, #login-pass, #login-button {
+    display: inline-block;
+}

@@ -1,0 +1,67 @@
+{{ define "loginSignup"}}
+<!DOCTYPE html>
+<head>
+    <meta charset="utf-8">
+    <title>Homepage</title>
+    <link rel="stylesheet" type="text/css" href="/src/css/loginSignup.css">
+</head>
+<body> 
+    <div id="outer">
+        <div id="top">
+            <div id="logo">
+                <a href="/">
+                    <img src="/src/images/logoTitle.png" alt="logo" width="180px" height="40px">
+                </a> 
+            </div>
+            <div id="login">
+                <form action="/login" method="POST">
+                    <div id="login-email">
+                        <p>Email</p>
+                        <input type="text" name="email" size="25">
+                    </div>
+                    <div id="login-pass">
+                        <p>Password</p>
+                        <input type="password" name="password" size="25">
+                    </div>
+                    <div id="login-button">
+                        <input type="submit" name="login" value="Log In">
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div id="signup">
+            <form action="/signup" method="POST">
+                <p>Sign Up</p>
+                <p>First Name</p>
+                <input type="text" name="first" size="25"> 
+                <p>Last Name</p>
+                <input type="text" name="last" size="25"> 
+
+                <p>Email</p>
+                <input type="text" name="email" size="25"> 
+                <p>New Password(8 characters or more)</p>
+                <input type="password" name="password" size="25"> 
+                <p>Birthday</p>
+                <select name="month">
+                    <option value="1">Jan</option>
+                    <option value="2">Feb</option>
+                    <option value="3">Mar</option>
+                    <option value="4">Apr</option>
+                    <option value="5">May</option>
+                    <option value="6">Jun</option>
+                    <option value="7">Jul</option>
+                    <option value="8">Aug</option>
+                    <option value="9">Sep</option>
+                    <option value="10">Oct</option>
+                    <option value="11">Nov</option>
+                    <option value="12">Dec</option>
+                </select>
+                <input type="text" name="day" value="Day" size="5">
+                <input type="text" name="year" value="Year" size="10">
+                <input type="submit" name="signup" value="Sign Up">
+            </form>
+            {{ . }}
+        </div>
+    </div>
+</body>
+{{ end }}
