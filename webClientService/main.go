@@ -10,17 +10,12 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
-	"syscall"
-
-	"github.com/urfave/cli"
-	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/julienschmidt/httprouter"
 )
 
 var loginSignupTemplate *template.Template
-
+var client *http.Client
 var self Microservice
 var configService Microservice
 
@@ -52,87 +47,37 @@ func main() {
 	}
 
 	//set up client for API request over TLS
-	//prepare certificate to be shown to API servers
-	cert, err := tls.LoadX509KeyPair("pem/Cert.pem", "pem/Key.pem")
+	tlsConfig, err := setTLSConfig("pem/Cert.pem", "pem/Key.pem", "./pem/others/")
 	if err != nil {
-		log.Fatalln("failed to load a pair of key and certificate : ", err)
-	}
-
-	//prepare certPool
-	certPool := x509.NewCertPool()
-	err = fillCertPool(certPool, "./pem/others/")
-	if err != nil {
-		log.Fatalln("failed to fill certPool : ", err)
-	}
-
-	//setup tlsConfig
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      certPool,
+		log.Fatalln(err)
 	}
 	//configure client
-	client := &http.Client{
+	client = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
 	}
-
-	var ad admin
-	app := cli.NewApp()
-	app.Name = "Facebook"
-	app.Usage = "Help people interact with each other wherever they are."
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:        "gmail, g",
-			Usage:       "Gmail address used to send emails to users when activating their accounts.",
-			Destination: &ad.Gmail,
-		},
-	}
-	app.Action = func(c *cli.Context) error {
-		if ad.Gmail == "" {
-			return errors.New("invalid gmail address")
-		}
-		fmt.Println("Enter password for ", ad.Gmail)
-		password, err := terminal.ReadPassword(syscall.Stdin)
-		if err != nil {
-			return errors.New("failed to read password : " + err.Error())
-		}
-		err = mailAuth(ad.Gmail, string(password))
-		if err != nil {
-			return errors.New("failed to authenticate with provided gmail address and password\n" + err.Error())
-		}
-		fmt.Println("Authentication finished successfully!")
-		ad.Password = string(password)
-
-		url := MicroMap["accountService"].BuildURL("https://", "admin")
-		r, err := client.Get(url)
-		if err != nil {
-			log.Fatalln("failed to connect account service.")
-		}
-		body, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer r.Body.Close()
-		fmt.Printf("%s\n", body)
-
-		mux := httprouter.New()
-		mux.GET("/", home)
-		mux.POST("/login", login)
-		mux.POST("/signup", signup)
-		mux.ServeFiles("/src/*filepath", http.Dir("src"))
-
-		server := http.Server{
-			Addr:    self.BuildURL("", ""),
-			Handler: mux,
-		}
-		return server.ListenAndServe()
-	}
-
-	err = app.Run(os.Args)
+	fmt.Println("test")
+	r, err := client.Get(MicroMap["accountService"].BuildURL("https://", "admin"))
 	if err != nil {
-		fmt.Println(err)
+		log.Fatalln("Failed to connect accountService over TLS : ", err)
 	}
+	defer r.Body.Close()
+	b, _ = ioutil.ReadAll(r.Body)
+	fmt.Println(string(b))
+
+	mux := httprouter.New()
+	mux.GET("/", home)
+	mux.POST("/login", login)
+	mux.POST("/signup", signup)
+	mux.ServeFiles("/src/*filepath", http.Dir("src"))
+
+	server := http.Server{
+		Addr:    self.BuildURL("", ""),
+		Handler: mux,
+	}
+	server.ListenAndServe()
+
 }
 
 func fillCertPool(certPool *x509.CertPool, filepath string) (err error) {
@@ -171,5 +116,30 @@ func GetAllServicesConf(url string) (m MServices, err error) {
 	}
 	//set up MicroMap for later convenient use
 	m = ParseIntoMap(micros)
+	return
+}
+
+func setTLSConfig(certPath, keyPath, othersCert string) (tlsConfig *tls.Config, err error) {
+	//prepare certificate to be shown to API servers
+	tlsConfig = &tls.Config{}
+	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		err = errors.New("failed to load a pair of key and certificate : " + err.Error())
+		return
+	}
+
+	//prepare certPool
+	certPool := x509.NewCertPool()
+	err = fillCertPool(certPool, othersCert)
+	if err != nil {
+		err = errors.New("failed to fill certPool : " + err.Error())
+		return
+	}
+
+	//setup tlsConfig
+	tlsConfig = &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      certPool,
+	}
 	return
 }
