@@ -46,6 +46,7 @@ func main() {
 		},
 	}
 	app.Action = func(c *cli.Context) error {
+		//Gmail account verification
 		if ad.Gmail == "" {
 			return errors.New("invalid gmail address")
 		}
@@ -72,37 +73,50 @@ func main() {
 		if err != nil {
 			log.Fatalln("failed to get service config : ", err)
 		}
-		//register handler
-		mux := httprouter.New()
-		mux.GET("/admin", adminRegister)
+
+		//config check (self == / != MicroMap)
+		if MicroMap["accountService"].Port != self.Port {
+			log.Fatalln("configuration error")
+		}
 
 		//configure tls
-		cert, err := tls.LoadX509KeyPair("pem/Cert.pem", "pem/Key.pem")
+		tlsConfig, err := setTLSConfig("pem/Cert.pem", "pem/Key.pem", "./pem/others/")
 		if err != nil {
-			log.Fatalln("failed to create cert : ", err)
+			log.Fatalln(err)
 		}
 
-		certPool := x509.NewCertPool()
-		err = fillCertPool(certPool, "./pem/others/")
-		if err != nil {
-			log.Fatalln("failed to fill certPool : ", err)
+		client := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: tlsConfig,
+				TLSNextProto:    make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+			},
 		}
 
-		tlsConfig := &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			ClientCAs:    certPool,
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-		}
-		tlsConfig.BuildNameToCertificate()
-
-		//configure server
+		//setup server
+		mux := httprouter.New()
+		mux.GET("/test", test)
 		server := http.Server{
-			Addr:      self.BuildURL("", ""),
-			Handler:   mux,
-			TLSConfig: tlsConfig,
+			Addr:         self.BuildURL("", ""),
+			Handler:      mux,
+			TLSConfig:    tlsConfig,
+			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 1),
 		}
 
-		return server.ListenAndServeTLS("", "")
+		//TLS Check webClientService ---> accountService
+		fmt.Println("test")
+		r, err := client.Get(MicroMap["webClientService"].BuildURL("https://", "test"))
+		if err != nil {
+			log.Fatalln("Failed to connect webClientService over TLS : ", err)
+		}
+		defer r.Body.Close()
+		b, _ = ioutil.ReadAll(r.Body)
+		fmt.Println(string(b))
+
+		err = server.ListenAndServeTLS("", "")
+		if err != nil {
+			fmt.Println("Here2", err)
+		}
+		return err
 	}
 	err := app.Run(os.Args)
 	if err != nil {
@@ -111,8 +125,8 @@ func main() {
 
 }
 
-func adminRegister(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	fmt.Fprintln(w, "Hello World!")
+func test(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	fmt.Fprintln(w, "Hello World! from accountService")
 }
 
 func fillCertPool(certPool *x509.CertPool, filepath string) (err error) {
@@ -176,5 +190,33 @@ func GetAllServicesConf(url string) (m MServices, err error) {
 	}
 	//set up MicroMap for later convenient use
 	m = ParseIntoMap(micros)
+	return
+}
+
+func setTLSConfig(certPath, keyPath, othersCert string) (tlsConfig *tls.Config, err error) {
+	//prepare certificate to be shown to API servers
+	tlsConfig = &tls.Config{}
+	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		err = errors.New("failed to load a pair of key and certificate : " + err.Error())
+		return
+	}
+
+	//prepare certPool
+	certPool := x509.NewCertPool()
+	err = fillCertPool(certPool, othersCert)
+	if err != nil {
+		err = errors.New("failed to fill certPool : " + err.Error())
+		return
+	}
+
+	//setup tlsConfig
+	tlsConfig = &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      certPool,
+		ClientCAs:    certPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+	}
+	tlsConfig.BuildNameToCertificate()
 	return
 }

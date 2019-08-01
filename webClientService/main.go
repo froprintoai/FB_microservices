@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -45,38 +46,55 @@ func main() {
 	if err != nil {
 		log.Fatalln("failed to get service config : ", err)
 	}
+	//config check (self == / != MicroMap)
+	if MicroMap["webClientService"].Port != self.Port {
+		log.Fatalln("configuration error")
+	}
 
 	//set up client for API request over TLS
 	tlsConfig, err := setTLSConfig("pem/Cert.pem", "pem/Key.pem", "./pem/others/")
 	if err != nil {
 		log.Fatalln(err)
 	}
-	//configure client
+
+	//setup client
 	client = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
+			TLSNextProto:    make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 		},
 	}
+	//setup server
+	mux := httprouter.New()
+	mux.GET("/test", test)
+	mux.GET("/", home)
+	mux.POST("/login", login)
+	mux.POST("/signup", signup)
+	mux.ServeFiles("/src/*filepath", http.Dir("src"))
+	serverTLS := &http.Server{
+		Addr:         self.BuildURL("", ""),
+		Handler:      mux,
+		TLSConfig:    tlsConfig,
+		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 1),
+	}
+	//################################################
+	//server.ListenAndServeTLS("", "")
+	go func() {
+		serverTLS.ListenAndServeTLS("", "")
+	}()
+
+	time.Sleep(time.Second * 20)
+
+	//TLS check accountService ---> webClientService
 	fmt.Println("test")
-	r, err := client.Get(MicroMap["accountService"].BuildURL("https://", "admin"))
+	r, err := client.Get(MicroMap["accountService"].BuildURL("https://", "test"))
 	if err != nil {
 		log.Fatalln("Failed to connect accountService over TLS : ", err)
 	}
 	defer r.Body.Close()
 	b, _ = ioutil.ReadAll(r.Body)
 	fmt.Println(string(b))
-
-	mux := httprouter.New()
-	mux.GET("/", home)
-	mux.POST("/login", login)
-	mux.POST("/signup", signup)
-	mux.ServeFiles("/src/*filepath", http.Dir("src"))
-
-	server := http.Server{
-		Addr:    self.BuildURL("", ""),
-		Handler: mux,
-	}
-	server.ListenAndServe()
+	//################################################
 
 }
 
@@ -111,6 +129,7 @@ func GetAllServicesConf(url string) (m MServices, err error) {
 		return
 	}
 	err = json.Unmarshal(body, &micros)
+	fmt.Println(micros)
 	if err != nil {
 		return
 	}
@@ -140,6 +159,13 @@ func setTLSConfig(certPath, keyPath, othersCert string) (tlsConfig *tls.Config, 
 	tlsConfig = &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      certPool,
+		ClientCAs:    certPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
 	}
+	tlsConfig.BuildNameToCertificate()
 	return
+}
+
+func test(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	fmt.Fprintln(w, "Hello from Client over TLS")
 }

@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 //Microservice is a struct used for referring to configuration of other services
 type Microservice struct {
 	Name string `json:"name"`
@@ -18,9 +20,10 @@ type MServices map[string]*Microservice
 //ParseIntoMap converts a slice of Microservice into MService, which is easier to access
 func ParseIntoMap(micros []Microservice) (m MServices) {
 	m = make(MServices, len(micros))
-	for _, v := range micros {
-		m[v.Name] = &v
+	for i := 0; i < len(micros); i++ {
+		m[micros[i].Name] = &micros[i]
 	}
+	fmt.Println(m)
 	return
 }
 
