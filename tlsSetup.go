@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -58,6 +59,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("failed to unmarshal : ", err)
 	}
+	fmt.Println(Microservices)
 
 	for i, service := range Microservices {
 		if i == 0 { //ignore configService because it doesn't use TLS
